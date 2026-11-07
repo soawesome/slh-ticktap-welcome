@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Welcome to SLH TickTap</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f4f8f8; --card:#fff; --fg:#14292b; --mute:#52686a; --accent:#0e8a85; --line:#d5e3e3; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1a1b; --card:#16282a; --fg:#e6f2f2; --mute:#9bb3b4; --accent:#38c4bd; --line:#2a4042; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 34rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
+  .tick { width:72px; height:72px; border-radius:50%; background:var(--accent); display:grid; place-items:center; margin-bottom:1.25rem; }
+  .tick svg { width:38px; height:38px; }
+  h1 { font-size:1.75rem; line-height:1.2; margin:0 0 .5rem; }
+  p.lead { color:var(--mute); margin:0 0 1.75rem; }
+  ol { margin:0; padding:0; list-style:none; counter-reset:s; display:grid; gap:.75rem; }
+  li { counter-increment:s; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1rem 1rem 1rem 3.4rem; position:relative; }
+  li::before { content:counter(s); position:absolute; left:1rem; top:1rem; width:1.7rem; height:1.7rem; border-radius:50%; background:var(--accent); color:#fff; font-weight:600; font-size:.95rem; display:grid; place-items:center; }
+  li b { display:block; }
+  li span { color:var(--mute); font-size:.95rem; }
+  h2 { font-size:1.1rem; margin:2rem 0 .5rem; }
+  ul { margin:0; padding-left:1.2rem; color:var(--mute); font-size:.95rem; }
+  ul li { background:none; border:0; border-radius:0; padding:0; counter-increment:none; position:static; }
+  ul li::before { content:none; }
+  small { display:block; margin-top:2rem; color:var(--mute); font-size:.85rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <h1>Email confirmed. Welcome to SLH TickTap.</h1>
+  <p class="lead">Your account is ready. Here is how to start.</p>
+
+  <ol>
+    <li><b>Open SLH TickTap on your iPhone</b><span>Install it from TestFlight if you have not yet. You need the TestFlight invitation from the team.</span></li>
+    <li><b>Turn on a passcode</b><span>The app will not scan without one. Settings &gt; Face ID &amp; Passcode (or Touch ID &amp; Passcode).</span></li>
+    <li><b>Sign in</b><span>Use the same email and the password you chose when you signed up.</span></li>
+    <li><b>Scan a wristband to clock in</b><span>Point the camera at the wristband QR code. When the patient is done, scan again to clock out and pick the bill time.</span></li>
+  </ol>
+
+  <h2>Good to know</h2>
+  <ul>
+    <li>The app never stores a patient's NRIC in readable form.</li>
+    <li>If you are offline, your scans are kept on the phone and sent when you are back online.</li>
+    <li>Forgot your password? Ask the TickTap team to reset it.</li>
+    <li>This is a pilot. Please use test wristbands only until the team says otherwise.</li>
+  </ul>
+
+  <small>SLH TickTap pilot. Questions: contact the TickTap team.</small>
+</main>
+</body>
+</html>
