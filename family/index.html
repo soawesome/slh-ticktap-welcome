@@ -122,28 +122,64 @@ const b64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/
 const open = (key, box) => chacha20poly1305(key, box.slice(0, 12)).decrypt(box.slice(12));
 let email = "";
 
+// Family must use their own email, never an SLH work address (Kevin, 13 Nov 2026).
+const STAFF = /@([a-z0-9-]+\.)*stluke\.org\.sg$/i;
+let confirmEmail = "";
+
 async function start() {
   const { data: { session } } = await db.auth.getSession();
+  if (invite && token) {
+    // A new invitation always shows the join form, even when this browser is signed in already, and says who that is.
+    show("join");
+    if (session) {
+      $("email").value = session.user.email || "";
+      $("joinMsg").textContent = "This browser is signed in as " + (session.user.email || "another account") + ". Keep that email to join with it, or type a different one.";
+    }
+    return;
+  }
   if (session) return home();
-  if (invite && token) show("join"); else show("signin");
+  show("signin");
 }
 
 $("joinBtn").onclick = async () => {
   const name = $("name").value.trim(), relation = $("relation").value; email = $("email").value.trim().toLowerCase();
   if (!name || !email) { $("joinMsg").textContent = "Please give your name and email."; return; }
+  if (STAFF.test(email)) { $("joinMsg").textContent = "Please use your personal email, not an SLH work email."; return; }
+  // say whose email the code goes to, and ask once more before joining
+  if (confirmEmail !== email) {
+    confirmEmail = email;
+    $("joinMsg").textContent = "We will send a sign-in code to " + email + ". Is that your email? Tap the button again to confirm.";
+    $("joinBtn").textContent = "Yes, send the code to " + email;
+    return;
+  }
   $("joinBtn").disabled = true; $("joinMsg").textContent = "";
   try {
     const r = await fetch(E.url + "/functions/v1/family-join", { method: "POST", headers: { "content-type": "application/json", apikey: E.key, authorization: "Bearer " + E.key },
       body: JSON.stringify({ invite, token, email, name, relation }) });
     const j = await r.json();
     if (!r.ok) { $("joinMsg").textContent = j.message || "Could not join."; $("joinBtn").disabled = false; return; }
+    // already signed in with this same email: straight in. Signed in as someone else: sign that account out first.
+    const { data: { session } } = await db.auth.getSession();
+    if (session && (session.user.email || "").toLowerCase() === email) return home();
+    if (session) await db.auth.signOut();
     await sendCode();
   } catch { $("joinMsg").textContent = "No connection. Please try again."; $("joinBtn").disabled = false; }
 };
-$("sendBtn").onclick = async () => { email = $("email2").value.trim().toLowerCase(); if (email) await sendCode(); };
+$("email").addEventListener("input", () => { confirmEmail = ""; $("joinBtn").textContent = "Send me a code"; });
+$("sendBtn").onclick = async () => {
+  email = $("email2").value.trim().toLowerCase();
+  if (!email) return;
+  if (STAFF.test(email)) { $("signMsg").textContent = "Please use the personal email you joined with, not an SLH work email."; return; }
+  await sendCode(true);
+};
 
-async function sendCode() {
+async function sendCode(fromSignIn = false) {
   const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  // an email nobody invited: say so plainly, on the sign-in form, instead of moving to the code screen
+  if (fromSignIn && error && /signup|not found|not allowed|no user/i.test(error.message || "")) {
+    $("signMsg").textContent = "This email has not been invited yet. Use the email you joined with, or ask the therapist for an invitation.";
+    return;
+  }
   show("code");
   $("codeHint").textContent = error
     ? (E.name ? "Test system: no email is sent. Ask the TickTap team for your code." : "Could not send the code: " + error.message)
