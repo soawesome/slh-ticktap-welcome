@@ -172,13 +172,19 @@ async function home() {
   // the key from this phone's invitation link belongs to this patient
   const pending = store.get("tt-pending-key");
   if (pending) { store.set("tt-key-" + member.patient_code, pending); try { localStorage.removeItem("tt-pending-key"); } catch {} }
+  if (member.status === "expired") {
+    document.querySelectorAll(".approvedOnly").forEach((el) => (el.hidden = true));
+    $("checkBtn").hidden = true;
+    $("state").textContent = "This request closed after 7 days without an answer. Please ask a therapist at the bedside for a new invitation.";
+    return;
+  }
   const waiting = member.status === "pending";
   document.querySelectorAll(".approvedOnly").forEach((el) => (el.hidden = waiting));
   $("checkBtn").hidden = !waiting;
   clearTimeout(waitTimer);
   if (waiting) {
     // Check by itself every 15 seconds, so the clip appears as soon as a therapist approves (Kevin, 13 Nov 2026).
-    $("state").textContent = "A therapist needs to approve you first. This page updates by itself once they do.";
+    $("state").textContent = "A therapist needs to approve you first. This is usually within 2 days. This page updates by itself once they do.";
     waitTimer = setTimeout(home, 15000);
     return;
   }
