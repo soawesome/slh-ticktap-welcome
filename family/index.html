@@ -67,6 +67,7 @@
     <div class="card">
       <b id="hello"></b>
       <p class="mute" id="state"></p>
+      <button class="ghost" id="checkBtn" hidden>Check again</button>
       <div class="player" id="player" hidden>
         <video id="video" controls playsinline controlslist="nodownload noplaybackrate" disablepictureinpicture></video>
         <div class="mark mid" id="markMid"></div>
@@ -74,12 +75,12 @@
       </div>
       <p class="mute" id="clipInfo"></p>
     </div>
-    <div class="card">
+    <div class="card approvedOnly">
       <b>Want every clip, in full quality?</b>
       <p class="mute">Get the SLH TickTap app. After you install it, come back to this page on the same phone and tap Open in the app. A therapist then approves your phone.</p>
       <button class="ghost" id="appBtn">Open in the app</button>
     </div>
-    <div class="card">
+    <div class="card approvedOnly">
       <b>Invite another family member</b>
       <p class="mute">Makes a link for one person, valid 7 days. A therapist approves them before they see anything.</p>
       <button class="ghost" id="inviteBtn">Make an invitation link</button>
@@ -157,7 +158,11 @@ $("codeBtn").onclick = async () => {
 };
 $("outBtn").onclick = async () => { await db.auth.signOut(); location.reload(); };
 
-let member = null;
+let member = null, waitTimer = null;
+$("checkBtn").onclick = () => { $("state").textContent = "Checking..."; home(); };
+// Coming back to the tab, or Safari restoring the page from memory: check again rather than show an old answer.
+document.addEventListener("visibilitychange", () => { if (!document.hidden && member && member.status === "pending") home(); });
+window.addEventListener("pageshow", (e) => { if (e.persisted && member) home(); });
 async function home() {
   show("home");
   const { data: me, error } = await db.rpc("family_me");
@@ -167,7 +172,16 @@ async function home() {
   // the key from this phone's invitation link belongs to this patient
   const pending = store.get("tt-pending-key");
   if (pending) { store.set("tt-key-" + member.patient_code, pending); try { localStorage.removeItem("tt-pending-key"); } catch {} }
-  if (member.status === "pending") { $("state").textContent = "A therapist needs to approve you first. Please check back later."; return; }
+  const waiting = member.status === "pending";
+  document.querySelectorAll(".approvedOnly").forEach((el) => (el.hidden = waiting));
+  $("checkBtn").hidden = !waiting;
+  clearTimeout(waitTimer);
+  if (waiting) {
+    // Check by itself every 15 seconds, so the clip appears as soon as a therapist approves (Kevin, 13 Nov 2026).
+    $("state").textContent = "A therapist needs to approve you first. This page updates by itself once they do.";
+    waitTimer = setTimeout(home, 15000);
+    return;
+  }
   if (member.status === "suspended") { $("state").textContent = "Paused after a screen recording was detected. Please speak to the therapist."; return; }
   await latest();
 }
