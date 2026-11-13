@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>SLH TickTap for families</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f4f8f8; --card:#fff; --fg:#14292b; --mute:#52686a; --accent:#0e8a85; --line:#d5e3e3; --warn:#b4560f; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1a1b; --card:#16282a; --fg:#e6f2f2; --mute:#9bb3b4; --accent:#38c4bd; --line:#2a4042; --warn:#f0a35e; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 34rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+  h1 { font-size:1.6rem; line-height:1.2; margin:0 0 .4rem; }
+  p.lead { color:var(--mute); margin:0 0 1.5rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1.1rem; margin-bottom:1rem; }
+  label { display:block; font-weight:600; margin:.75rem 0 .3rem; }
+  input, select { width:100%; font:inherit; padding:.7rem .8rem; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--fg); }
+  button { font:inherit; font-weight:600; padding:.75rem 1rem; border-radius:12px; border:0; background:var(--accent); color:#fff; width:100%; margin-top:1rem; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  button:disabled { opacity:.5; }
+  .msg { color:var(--warn); margin-top:.75rem; }
+  .mute { color:var(--mute); font-size:.92rem; }
+  .player { position:relative; border-radius:12px; overflow:hidden; background:#000; }
+  .player video { width:100%; display:block; }
+  .mark { position:absolute; inset:auto 0 0 0; padding:.35rem .6rem; font-size:.8rem; color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.65)); pointer-events:none; }
+  .mark.mid { inset:40% 0 auto 0; text-align:center; background:none; opacity:.35; font-size:1rem; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SLH TickTap for families</h1>
+  <p class="lead">Short therapy clips from St Luke's Hospital, shared with the patient's permission.</p>
+
+  <!-- 1. join with the invitation -->
+  <section id="join" class="card" hidden>
+    <b>Join</b>
+    <p class="mute">The therapist invited you. Tell us who you are. We send a code to your email to sign in.</p>
+    <label for="name">Your name</label><input id="name" autocomplete="name" maxlength="60">
+    <label for="relation">How you are related</label>
+    <select id="relation"><option>Daughter</option><option>Son</option><option>Spouse</option><option>Parent</option><option>Sibling</option><option>Grandchild</option><option>Friend</option><option>Other family</option></select>
+    <label for="email">Email</label><input id="email" type="email" autocomplete="email" inputmode="email">
+    <button id="joinBtn">Send me a code</button>
+    <p class="mute">By joining you agree to use the clips only to support the patient: do not record, copy or share them. Your name is shown on every clip you watch.</p>
+    <div class="msg" id="joinMsg"></div>
+  </section>
+
+  <!-- 2. sign in (also for people who joined before) -->
+  <section id="signin" class="card" hidden>
+    <b>Sign in</b>
+    <label for="email2">Email</label><input id="email2" type="email" autocomplete="email" inputmode="email">
+    <button id="sendBtn">Send me a code</button>
+    <div class="msg" id="signMsg"></div>
+  </section>
+  <section id="code" class="card" hidden>
+    <b>Enter the code</b>
+    <p class="mute" id="codeHint">We sent a code to your email.</p>
+    <input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10">
+    <button id="codeBtn">Sign in</button>
+    <div class="msg" id="codeMsg"></div>
+  </section>
+
+  <!-- 3. the latest clip -->
+  <section id="home" hidden>
+    <div class="card">
+      <b id="hello"></b>
+      <p class="mute" id="state"></p>
+      <div class="player" id="player" hidden>
+        <video id="video" controls playsinline controlslist="nodownload noplaybackrate" disablepictureinpicture></video>
+        <div class="mark mid" id="markMid"></div>
+        <div class="mark" id="mark"></div>
+      </div>
+      <p class="mute" id="clipInfo"></p>
+    </div>
+    <div class="card">
+      <b>Want every clip, in full quality?</b>
+      <p class="mute">Get the SLH TickTap app. After you install it, come back to this page on the same phone and tap Open in the app. A therapist then approves your phone.</p>
+      <button class="ghost" id="appBtn">Open in the app</button>
+    </div>
+    <div class="card">
+      <b>Invite another family member</b>
+      <p class="mute">Makes a link for one person, valid 7 days. A therapist approves them before they see anything.</p>
+      <button class="ghost" id="inviteBtn">Make an invitation link</button>
+      <div class="msg" id="inviteMsg"></div>
+    </div>
+    <button class="ghost" id="outBtn">Sign out</button>
+  </section>
+
+  <p class="mute" id="envNote"></p>
+</main>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { chacha20poly1305 } from "https://esm.sh/@noble/ciphers@1.0.0/chacha";
+
+// Public project addresses (no secrets: what each signed-in person may do is decided by the database).
+const ENVS = {
+  d: { url: "https://jlbwllcccqsgjbwygexd.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpsYndsbGNjY3FzZ2pid3lnZXhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4NzQ5NTYsImV4cCI6MjEwOTQ1MDk1Nn0.sFm9eGTrpsGs9afMl-hiZ71fuN3q5Zj8p49i3vz-Cu0", name: "TEST (DEV)" },
+  p: { url: "https://wqqwmvustpmbdgutjkhh.supabase.co", key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxcXdtdnVzdHBtYmRndXRqa2hoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4NzUwNjYsImV4cCI6MjEwOTQ1MTA2Nn0.Pk1BulcXwGJAOZcaxDCu-a9pehZDMlAIwJ-HHAMGtKo", name: "" },
+};
+const $ = (id) => document.getElementById(id);
+const show = (...ids) => ["join", "signin", "code", "home"].forEach((s) => ($(s).hidden = !ids.includes(s)));
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+// The link's part after # never reaches any server. Read it, keep the key on this device, then clear it from the address bar.
+const frag = new URLSearchParams(location.hash.slice(1));
+const invite = frag.get("i"), token = frag.get("t"), linkKey = frag.get("k");
+const env = frag.get("e") || store.get("tt-env") || "d";
+store.set("tt-env", env);
+if (linkKey) store.set("tt-pending-key", linkKey);
+if (location.hash) history.replaceState(null, "", location.pathname);
+const E = ENVS[env] || ENVS.d;
+if (E.name) $("envNote").textContent = "Test system: " + E.name + ". Made-up clips only.";
+const db = createClient(E.url, E.key, { auth: { persistSession: true, storageKey: "tt-family-" + env } });
+
+const hex = (s) => Uint8Array.from(s.match(/../g).map((h) => parseInt(h, 16)));
+const b64url = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "=")), (c) => c.charCodeAt(0));
+// Apple CryptoKit "combined" box = 12-byte nonce || ciphertext || 16-byte tag
+const open = (key, box) => chacha20poly1305(key, box.slice(0, 12)).decrypt(box.slice(12));
+let email = "";
+
+async function start() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) return home();
+  if (invite && token) show("join"); else show("signin");
+}
+
+$("joinBtn").onclick = async () => {
+  const name = $("name").value.trim(), relation = $("relation").value; email = $("email").value.trim().toLowerCase();
+  if (!name || !email) { $("joinMsg").textContent = "Please give your name and email."; return; }
+  $("joinBtn").disabled = true; $("joinMsg").textContent = "";
+  try {
+    const r = await fetch(E.url + "/functions/v1/family-join", { method: "POST", headers: { "content-type": "application/json", apikey: E.key, authorization: "Bearer " + E.key },
+      body: JSON.stringify({ invite, token, email, name, relation }) });
+    const j = await r.json();
+    if (!r.ok) { $("joinMsg").textContent = j.message || "Could not join."; $("joinBtn").disabled = false; return; }
+    await sendCode();
+  } catch { $("joinMsg").textContent = "No connection. Please try again."; $("joinBtn").disabled = false; }
+};
+$("sendBtn").onclick = async () => { email = $("email2").value.trim().toLowerCase(); if (email) await sendCode(); };
+
+async function sendCode() {
+  const { error } = await db.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  show("code");
+  $("codeHint").textContent = error
+    ? (E.name ? "Test system: no email is sent. Ask the TickTap team for your code." : "Could not send the code: " + error.message)
+    : "We sent a code to " + email + ". It can take a minute.";
+}
+$("codeBtn").onclick = async () => {
+  $("codeBtn").disabled = true;
+  const { error } = await db.auth.verifyOtp({ email, token: $("otp").value.trim(), type: "email" });
+  $("codeBtn").disabled = false;
+  if (error) { $("codeMsg").textContent = "That code did not work. Check it, or ask for a new one."; return; }
+  home();
+};
+$("outBtn").onclick = async () => { await db.auth.signOut(); location.reload(); };
+
+let member = null;
+async function home() {
+  show("home");
+  const { data: me, error } = await db.rpc("family_me");
+  if (error || !me || !me.length) { $("state").textContent = "This account is not linked to a patient, or access has ended (for example after discharge)."; return; }
+  member = me[0];
+  $("hello").textContent = "Hello " + member.name;
+  // the key from this phone's invitation link belongs to this patient
+  const pending = store.get("tt-pending-key");
+  if (pending) { store.set("tt-key-" + member.patient_code, pending); try { localStorage.removeItem("tt-pending-key"); } catch {} }
+  if (member.status === "pending") { $("state").textContent = "A therapist needs to approve you first. Please check back later."; return; }
+  if (member.status === "suspended") { $("state").textContent = "Paused after a screen recording was detected. Please speak to the therapist."; return; }
+  await latest();
+}
+
+async function latest() {
+  const k = store.get("tt-key-" + member.patient_code);
+  if (!k) { $("state").textContent = "Open your invitation link on this phone once more to unlock the clips."; return; }
+  const { data: c, error } = await db.rpc("family_latest_clip", { p_member: member.id });
+  if (error) { $("state").textContent = "Could not load the clip."; return; }
+  if (!c) { $("state").textContent = "No clip yet. The therapist will share one after a session."; return; }
+  $("state").textContent = "Latest clip";
+  const { data: file, error: e2 } = await db.storage.from("clips").download(c.path);
+  if (e2) { $("state").textContent = "Could not download the clip."; return; }
+  try {
+    const clipKey = open(b64url(k), hex(c.locked_key));
+    const mp4 = open(clipKey, new Uint8Array(await file.arrayBuffer()));
+    const url = URL.createObjectURL(new Blob([mp4], { type: "video/mp4" }));
+    $("video").src = url; $("player").hidden = false;
+    const when = new Date(c.created_at);
+    $("mark").textContent = member.name + " · " + when.toLocaleDateString();
+    $("markMid").textContent = member.name;
+    $("clipInfo").textContent = Math.round(c.seconds) + " s · " + when.toLocaleString() + (c.by ? " · recorded by " + c.by : "");
+  } catch { $("state").textContent = "This clip could not be unlocked on this phone. Open your invitation link here again."; }
+}
+
+$("inviteBtn").onclick = async () => {
+  const k = member && store.get("tt-key-" + member.patient_code);
+  const { data, error } = await db.rpc("family_invite_family", { p_member: member.id });
+  if (error || !k) { $("inviteMsg").textContent = "Could not make a link."; return; }
+  const link = location.origin + location.pathname + "#i=" + data.id + "&t=" + data.token + "&k=" + k + "&e=" + env;
+  try { await navigator.share({ title: "SLH TickTap invitation", url: link }); }
+  catch { try { await navigator.clipboard.writeText(link); $("inviteMsg").textContent = "Link copied. Send it to one person."; } catch { $("inviteMsg").textContent = link; } }
+};
+$("appBtn").onclick = () => {
+  const k = member && store.get("tt-key-" + member.patient_code);
+  if (!k) return;
+  location.href = "slhticktap://family#m=" + member.id + "&k=" + k + "&e=" + env;
+};
+
+start();
+</script>
+</body>
+</html>
